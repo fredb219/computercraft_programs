@@ -1,5 +1,6 @@
 
 
+
 -- Basic monolevel mining
 
 arg = { ... }
@@ -82,7 +83,7 @@ function run()
 		cycleTodo = cycleTodo - 1
 		
 		-- Check capacity
-		if turtle.getItemSpace(16) then 
+		if turtle.getItemSpace(16)<1 then 
 			break
 		end
 	end
