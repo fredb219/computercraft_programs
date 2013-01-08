@@ -1,0 +1,126 @@
+-- Basic monolevel mining
+
+arg = { ... }
+local rowLength = 0
+local cycleCount = 0
+local autonomyPerFuel = 0
+local autonomy = 0
+
+
+function minePosition()
+	turtle.dig()
+	turtle.digUp()
+	turtle.digDown()
+	
+	-- Mine Left
+	turtle.turnLeft()
+	turtle.dig()
+	
+	-- Mine Right	
+	turtle.turnRight()
+	turtle.turnRight()
+	turtle.dig()
+	
+	turtle.turnLeft()
+		
+	print(turtle.getFuelLevel())
+end
+
+
+function getAutonomy()
+	return turtle.getFuelLevel() + turtle.getItemCount(1) * autonomyPerFuel
+end
+
+function getCycleLength()
+	return rowLength * 2 + 9
+end 
+
+function init()
+	print("Init mining turtle ...")
+
+	rowLength = tonumber(arg[1])
+	cycleCount = tonumber(arg[2])
+
+	print("Row lenght: "..rowLength)
+	print("Cycle count: "..cycleCount)
+	
+	print("Check autonomy ...")
+	currentAutonomy = turtle.getFuelLevel()
+	turtle.select(1) -- first slot is fuel slot
+	turtle.refuel(1) 
+	nextAutonomy = turtle.getFuelLevel()
+	autonomyPerFuel = nextAutonomy - currentAutonomy
+		
+	print("Autonomy per fuel: "..autonomyPerFuel)
+	print("Autonomy:          "..getAutonomy())
+	print("Cycle length:   "..getCycleLength())
+	print("Max cycle count:   "..(getAutonomy()/getCycleLength()))
+	
+	print("Init mining turtle done")
+end
+
+function run()
+	cycleTodo = cycleCount
+	while cycleCount > 0 and (getAutonomy() / getCycleLength()) > 0 do
+		while turtle.getFuelLevel() < getCycleLength() do
+			turtle.refuel(1) 
+		end
+		
+		runCycle()
+		cycleTodo -= 1
+	end
+end
+
+function runCycle()
+	-- Create corridor
+	turtle.turnRight()
+	
+	for i=1,3 do
+		turtle.dig()
+		turtle.forward()
+		turtle.digUp()
+	end
+	turtle.turnLeft()
+	
+	-- Go away
+	for i=1,rowLength do
+		minePosition()
+		turtle.forward()
+	end
+	
+	-- Turn
+	turtle.turnLeft()
+	for i=1,3 do
+		turtle.dig()
+		turtle.forward()
+	end
+	turtle.turnLeft()
+	
+	-- Go back
+	for i=1,rowLength do
+		minePosition()
+		turtle.forward()
+	end
+	
+	-- Go to next cycle position
+	
+	turtle.turnLeft()
+	for i=1,3 do
+		turtle.forward()
+	end
+	turtle.turnLeft()
+	
+end
+	
+end
+
+if not arg[1] or not arg[2] then
+	print("Usage: mine rowLength cycleCount")
+	return
+end
+
+init()
+
+run()
+
+
