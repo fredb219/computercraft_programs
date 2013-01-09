@@ -1,0 +1,128 @@
+
+-- Basic monolevel mining
+
+arg = { ... }
+local length = 0
+local height = 0
+local width = 0
+local inverted = false
+local front = true
+local autonomyPerFuel = 0
+local fuelSlot = 1
+
+
+function getCycleLength()
+	return length * height + height
+end 
+
+function getAutonomy()
+	return turtle.getFuelLevel() + turtle.getItemCount(1) * autonomyPerFuel
+end
+
+function init()
+	print("Init room turtle ...")
+
+	length = tonumber(arg[1])
+	width = tonumber(arg[2])
+	height = tonumber(arg[3])
+	
+	print("Lenght: "..length)
+	print("Widtht: "..width)
+	print("Height: "..height)
+	
+	print("Check autonomy ...")
+	currentAutonomy = turtle.getFuelLevel()
+	turtle.select(1) -- first slot is fuel slot
+	turtle.refuel(1) 
+	nextAutonomy = turtle.getFuelLevel()
+	autonomyPerFuel = nextAutonomy - currentAutonomy
+	
+	print("Init room done")
+end
+
+function run()
+	cycleTodo = width
+	while cycleTodo > 0 and (getAutonomy() / getCycleLength()) >= 1 do
+		print("Cycle left: "..cycleTodo.."/"..width)
+		print("Autonomy "..turtle.getFuelLevel().."/"..getAutonomy())
+		
+		turtle.select(1)
+		while turtle.getFuelLevel() < getCycleLength() do
+			turtle.refuel(1) 
+		end
+		
+		runCycle()
+		cycleTodo = cycleTodo - 1
+		inverted = not inverted
+	end
+	
+	if inverted then
+		for i=1,height do
+			turtle.down()
+		end
+	end
+	
+end
+
+function digMove()
+	while turtle.forward() == false do
+		turtle.dig()
+	end
+	
+end
+
+function runCycle()
+
+	print("Begin cycle")
+	
+	digMove()
+	
+	if front then
+		turtle.turnLeft()
+	else
+		turtle.turnRight()
+	end
+	
+	
+	for i=1,height do
+		for i=1,lenght do
+			digMove()
+		end
+		
+		if not inverted then
+			while turtle.up() == false do
+				turtle.digUp()
+			end
+			tutle.turnLeft()
+			tutle.turnLeft()
+		else
+			while turtle.down() == false do
+				turtle.digDown()
+			end
+			tutle.turnLeft()
+			tutle.turnLeft()
+		end
+		
+		front = not front
+	end
+	
+	if front then
+		turtle.turnLeft()
+	else
+		turtle.turnRight()
+	end
+	
+	
+	print("End cycle")
+end
+
+if not arg[1] or not arg[2] or not arg[3] then
+	print("Usage: room lenght width height")
+	return
+end
+
+init()
+
+run()
+
+
