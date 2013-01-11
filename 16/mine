@@ -1,0 +1,290 @@
+
+
+
+
+
+-- Basic monolevel mining
+
+arg = { ... }
+local rowLength = 0
+local cycleCount = 0
+
+local fuelSlot = 1
+local firstGarbageSlot = 2
+local lastGarbageSlot = 5
+
+function refuel()
+	if turtle.getFuelLevel() == 0 then
+		turtle.select(fuelSlot)
+		turtle.refuel(1) 
+	end
+end
+
+function forward()
+	refuel()
+	while turtle.forward() == false do
+		digForward()
+	end
+end
+
+function back()
+	refuel()
+	turtle.back()
+end
+
+function up()
+	refuel()
+	while turtle.up() == false do
+		digUp()
+	end
+end
+
+
+function down()
+	refuel()
+	while turtle.down() == false do
+		digDown()
+	end
+end
+
+
+function isCool(compareFunc, detectFunc)
+	
+	if not detectFunc() then
+		return false
+	end
+	
+	for i=firstGarbageSlot,lastGarbageSlot do
+		turtle.select(i)
+		if compareFunc() then
+			return false
+		end
+	end
+	print("is cool")
+	return true
+end
+
+function isCoolForward()
+	return isCool(turtle.compare, turtle.detect)
+end
+
+function isCoolUp()
+	return isCool(turtle.compareUp, turtle.detectUp)
+end
+
+function isCoolDown()
+	return isCool(turtle.compareDown, turtle.detectDown)
+end
+
+function digForward()
+	dig(turtle.dig, turtle.detect, turtle.compare)
+end
+
+function digUp()
+	dig(turtle.digUp)
+end
+
+function digDown()
+	dig(turtle.digDown)
+end
+
+function dig(digFunc)
+	
+	-- dig
+	turtle.select(1)
+	digFunc()
+	
+	-- check garbage
+	for i=firstGarbageSlot,lastGarbageSlot do
+		if turtle.getItemSpace(i) == 0 then
+			turtle.select(i)
+			turtle.drop(1)
+		end
+	end
+	
+	-- Check capacity
+	if turtle.getItemCount(16)>0 then 
+		-- TODO go empty
+		exit()
+	end
+end
+
+function goAndMine()
+	digForward()
+	forward()
+	
+	minePosition()
+	digUp()
+end
+
+function minePosition()
+	if isCoolForward() then
+		digForward()
+		forward()
+		
+		minePosition()
+	
+		back()
+	end
+	
+	--Mine top	
+	if isCoolUp() then
+		print("up is cool")
+		digUp()
+		up()
+		
+		minePosition()
+		
+		down()
+	end
+	
+	--Mine bottom
+	if isCoolDown() then
+		digDown()
+		down()
+		
+		minePosition()
+		
+		up()
+	end
+	
+	-- Mine Left
+	
+	turtle.turnLeft()
+	if isCoolForward() then
+		digForward()
+		forward()
+		
+		minePosition()
+	
+		turtle.turnLeft()
+		turtle.turnLeft()
+		
+		forward()
+		-- Dont turn left to optimise mine right
+	else
+		turtle.turnLeft()
+		turtle.turnLeft()
+	end
+	
+	-- Mine Right	
+	
+	-- Dont turn right, already aligned
+	if isCoolForward() then
+		digForward()
+		forward()
+		
+		minePosition()
+	
+		turtle.turnLeft()
+		turtle.turnLeft()
+		
+		forward()
+		turtle.turnRight()
+	else
+		turtle.turnLeft()
+	end
+	
+end
+
+
+function getAutonomy()
+	return turtle.getFuelLevel() + turtle.getItemCount(1) * autonomyPerFuel
+end
+
+function getCycleLength()
+	return rowLength * 2 + 12
+end 
+
+function init()
+	print("Init mining turtle ...")
+
+	rowLength = tonumber(arg[1])
+	cycleCount = tonumber(arg[2])
+
+	print("Row lenght: "..rowLength)
+	print("Cycle count: "..cycleCount)
+	
+	print("Check autonomy ...")
+	currentAutonomy = turtle.getFuelLevel()
+	turtle.select(1) -- first slot is fuel slot
+	turtle.refuel(1) 
+	nextAutonomy = turtle.getFuelLevel()
+	autonomyPerFuel = nextAutonomy - currentAutonomy
+		
+	print("Autonomy per fuel: "..autonomyPerFuel)
+	print("Autonomy:          "..getAutonomy())
+	print("Cycle length:   "..getCycleLength())
+	print("Max cycle count:   "..(getAutonomy()/getCycleLength()))
+	
+	print("Init mining turtle done")
+end
+
+function run()
+	cycleTodo = cycleCount
+	while cycleTodo > 0 do
+		print("Cycle left: "..cycleTodo.."/"..cycleCount)
+				
+		runCycle()
+		cycleTodo = cycleTodo - 1
+		
+	end
+end
+
+function digCorridor()
+	digForward()
+	forward()
+	digUp()
+	digDown()
+end
+
+function runCycle()
+
+	print("Begin cycle")
+	-- Create corridor
+	turtle.turnRight()
+	
+	for i=1,3 do
+		goAndMine()
+	end
+	turtle.turnLeft()
+	
+	-- Go away
+	for i=1,rowLength do
+		goAndMine()
+	end
+		
+	-- Turn
+	turtle.turnLeft()
+	for i=1,3 do
+		goAndMine()
+	end
+	turtle.turnLeft()
+	
+	-- Go back
+	for i=1,rowLength do
+		goAndMine()
+	end
+		
+	-- Go to next cycle position
+	
+	turtle.turnLeft()
+	for i=1,6 do
+		goAndMine()
+	end
+	turtle.turnLeft()
+	
+	
+	print("End cycle")
+end
+
+if not arg[1] or not arg[2] then
+	print("Usage: mine rowLength cycleCount")
+	return
+end
+
+init()
+
+run()
+
+
