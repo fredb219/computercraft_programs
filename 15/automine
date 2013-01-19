@@ -1,0 +1,769 @@
+-- Advanced monolevel mining
+
+arg = { ... }
+
+local maxDistance = 0
+
+local BLOCK_SIZE = 12
+local SOUTH = 0
+local NORTH = 2
+local WEST = 1
+local EAST = 3
+local LEFT = 0
+local RIGHT = 1
+
+
+local fuelSlot = 1
+local firstGarbageSlot = 2
+local lastGarbageSlot = 5
+local lastLocation = nil
+local moved = true
+local chestLocation = nil
+local compass = 0
+
+Block= {}
+Block.new = function(offsetX,offsetY)
+	local self = {}
+	self.offsetX = offsetX
+	self.offsetY = offsetY
+	
+	self.toString = function()
+		return "Block[offsetX="..self.offsetX..",offsetY="..self.offsetY.."]"
+	end
+	
+	self.getCornerLocation =function(corner)
+			localLocation = chestLocation
+			if corner == 0 then
+				localLocation = chestLocation.toSouth(6).toWest(5)
+			elseif corner == 1 then
+				localLocation = chestLocation.toSouth(6).toEast(6)
+			elseif corner == 2 then
+				localLocation = chestLocation.toNorth(5).toEast(6)
+			elseif corner == 3 then
+				localLocation = chestLocation.toNorth(5).toWest(5)
+			end
+			globalLocation = localLocation
+			globalLocation = globalLocation.toSouth(BLOCK_SIZE*self.offsetY)
+			globalLocation = globalLocation.toEast(BLOCK_SIZE*self.offsetX)
+	
+			return globalLocation;
+	end
+	
+	
+
+	return self
+end
+
+Location = {}
+Location.new = function(x, y, h)
+	local self = {}
+	self.x = x
+	self.y = y
+	self.h = h
+	
+	self.toString = function()
+		return "Location[x="..self.x..",y="..self.y..",h="..h.."]"
+	end
+	
+	self.toEast = function(offset)
+		return Location.new(self.x+offset, self.y, self.h)
+	end
+	
+	self.toWest = function(offset)
+		return Location.new(self.x-offset, self.y, self.h)
+	end
+	
+	self.toSouth = function(offset)
+		return Location.new(self.x, self.y+offset, self.h)
+	end
+	
+	self.toNorth = function(offset)
+		return Location.new(self.x, self.y-offset, self.h)
+	end
+	
+	self.minus = function(location)
+		return Location.new(self.x-location.x, self.y-location.y, self.h-location.h)
+	end
+	
+	self.plus = function(location)
+		return Location.new(self.x+location.x, self.y+location.y, self.h+location.h)
+	end
+	
+	self.distanceTo = function(location)
+		diff = self.minus(location)
+		
+		return math.sqrt(diff.x*diff.x + diff.y*diff.y+ diff.h*diff.h)
+	end
+	
+	
+	
+	return self
+	
+end
+Location.turtle = function()
+	if moved then
+		local x, h, y = gps.locate(5)
+		if not x then
+			error("No modem on the turtle or GPS system down !")
+		end
+		
+		lastLocation = Location.new(x, y, h)
+		moved = false
+	end
+	
+	
+	return lastLocation
+end
+
+function init()
+	print("Init mining turtle ...")
+
+	maxDistance = tonumber(arg[1])
+	
+	print("Max distance: "..maxDistance)
+	
+	-- Check garbage ini
+	for i=firstGarbageSlot,lastGarbageSlot do
+		if turtle.getItemCount(i) == 0 then
+			error("Garbage slot "..i.." is empty !")
+		end
+	end
+	
+	if not openModem() then
+		error("Modem init failed")
+	end
+	
+	print("Check autonomy ...")
+	currentAutonomy = turtle.getFuelLevel()
+	turtle.select(1) -- first slot is fuel slot
+	--turtle.refuel(1) 
+	nextAutonomy = turtle.getFuelLevel()
+	autonomyPerFuel = nextAutonomy - currentAutonomy
+	
+		
+	print("Autonomy per fuel: "..autonomyPerFuel)
+	print("Autonomy:          "..getAutonomy())
+	
+	print("Find chest position ...")
+	currentLocation =  Location.turtle()
+	if not turtle.back() then
+		error("Fail to go back to init location")
+	end
+	moved = true
+	backLocation =  Location.turtle()
+	if not turtle.forward() then
+		error("Fail to go forward to init location")
+	end
+	moved = true
+	
+	diff = currentLocation.minus(backLocation)
+	
+	chestLocation = currentLocation.plus(diff)
+	if diff.y > 0 then
+		compass = SOUTH
+	elseif diff.y < 0 then
+		compass = NORTH
+	elseif diff.x > 0 then
+		compass = EAST
+	else
+		compass = WEST
+	end
+	
+	print("Chest location: "..chestLocation.toString())
+	print("Direction: "..compass)
+	
+	print("Init mining turtle done")
+end
+
+function run()
+	
+	blockRadius = 0
+	maxRadius = math.floor(maxDistance / BLOCK_SIZE)
+	
+	print("Max radius block : "..maxRadius)	
+	
+	lastBlock = nil
+		
+	for blockRadius=1, maxRadius do
+			
+		print("Radius "..blockRadius..", Right")	
+		-- Right
+		for i=-blockRadius+1,blockRadius-1 do
+			print("i "..i)	
+			currentBlock = Block.new(blockRadius, i)
+			
+			mineBlock(lastBlock, currentBlock)
+			lastBlock = currentBlock
+		end
+		
+		print("Radius "..blockRadius..", Top")	
+		-- Top
+		for i=blockRadius,-blockRadius,-1 do
+			currentBlock = Block.new(i, blockRadius)
+			
+			mineBlock(lastBlock, currentBlock)
+			lastBlock = currentBlock
+		end
+	
+		print("Radius "..blockRadius..", Left")	
+		-- Left
+		for i=blockRadius-1,-blockRadius+1,-1 do
+			currentBlock = Block.new(-blockRadius, i)
+			
+			mineBlock(lastBlock, currentBlock)
+			lastBlock = currentBlock
+		end
+	
+		print("Radius "..blockRadius..", Bottom")	
+		-- Bottom
+		for i=-blockRadius,blockRadius do
+			currentBlock = Block.new(i, -blockRadius)
+			
+			mineBlock(lastBlock, currentBlock)
+			lastBlock = currentBlock
+		end
+		mineBlock(lastBlock, Block.new(-blockRadius, -blockRadius))
+	end
+end
+
+function mineBlock(currentBlock, nextBlock)
+	print("mineBlock")
+	if not currentBlock then
+		return
+	end
+	
+	print("currentBlock "..currentBlock.toString())
+	print("nextBlock "..nextBlock.toString())
+	
+	
+	
+	blockStartLocation, corner, distance = findNearestBlockCorner(Location.turtle(), currentBlock)
+	
+	print("corner  "..corner)
+	
+	
+	gotoLocation(blockStartLocation, false)
+	
+	-- Simulate with direction north and south
+	if corner == 0 or corner == 1 then
+		nextBlockStartLocationNS, nextCorner, nextDistanceNS = findNearestBlockCorner(Location.turtle().toNorth(BLOCK_SIZE), nextBlock)
+	else	
+		nextBlockStartLocationNS, nextCorner, nextDistanceNS = findNearestBlockCorner(Location.turtle().toSouth(BLOCK_SIZE), nextBlock)
+	end
+		
+	-- Simulate with direction east and west
+	if corner == 0 or corner == 3 then
+		nextBlockStartLocationEW, nextCorner, nextDistanceEW = findNearestBlockCorner(Location.turtle().toEast(BLOCK_SIZE), nextBlock)
+	else	
+		nextBlockStartLocationEW, nextCorner, nextDistanceEW = findNearestBlockCorner(Location.turtle().toWest(BLOCK_SIZE), nextBlock)
+	end
+	
+	
+	if nextDistanceNS <  nextDistanceEW then
+		if corner == 0 then
+			startDirection = EAST
+			firstTurn = LEFT
+		elseif corner == 1  then
+			startDirection = WEST
+			firstTurn = RIGHT
+		elseif corner == 2  then
+			startDirection = WEST
+			firstTurn = LEFT
+		elseif corner == 3  then
+			startDirection = EAST
+			firstTurn = RIGHT
+		end
+	else
+		if corner == 0 then
+			startDirection = NORTH
+			firstTurn = RIGHT
+		elseif corner == 1  then
+			startDirection = NORTH
+			firstTurn = LEFT
+		elseif corner == 2  then
+			startDirection = SOUTH
+			firstTurn = RIGHT
+		elseif corner == 3  then
+			startDirection = SOUTH
+			firstTurn = LEFT
+		end
+	end
+	
+	--Init rotation
+	turnTo(startDirection)
+	
+	print("startDirection  "..startDirection)
+	print("firstTurn  "..firstTurn)
+	--sleep(5)
+	
+	
+	
+	for j=1, 2 do
+	
+		for i=1, BLOCK_SIZE-2 do
+			goAndMine()
+		end
+		
+		if firstTurn == LEFT then
+			turnLeft()
+		else
+			turnRight()
+		end
+		
+		for i=1, 3 do
+			goAndMine()
+		end
+		
+		if firstTurn == LEFT then
+			turnLeft()
+		else
+			turnRight()
+		end
+		
+		for i=1, BLOCK_SIZE-2 do
+			goAndMine()
+		end
+		
+		if firstTurn == LEFT then
+			turnRight()
+		else
+			turnLeft()
+		end
+		
+		for i=1, 3 do
+			goAndMine()
+		end
+		
+		if firstTurn == LEFT then
+			turnRight()
+		else
+			turnLeft()
+		end
+		
+	end
+end
+
+function goAndMine()
+	
+	digForward()
+	forward()
+	
+	--minePosition()
+	digUp()
+	
+end
+
+function minePosition()
+	print("mine position")
+	if isCoolForward() then
+		digForward()
+		if forward() then
+			minePosition()
+			back()
+		end
+	end
+	
+	--Mine top	
+	if isCoolUp() then
+		print("up is cool")
+		digUp()
+		if up() then
+			minePosition()
+			down()
+		end
+	end
+	
+	--Mine bottom
+	if isCoolDown() then
+		print("down is cool")
+		digDown()
+		if down() then
+			minePosition()
+			up()
+		end
+	end
+	
+	-- Mine Left
+	
+	turnLeft()
+	if isCoolForward() then
+		print("left is cool")
+		digForward()
+		if forward() then
+		
+			minePosition()
+		
+			turnLeft()
+			turnLeft()
+		
+			forward()
+		else
+			turnLeft()
+			turnLeft()
+		end
+		-- Dont turn left to optimise mine right
+	else
+		turnLeft()
+		turnLeft()
+	end
+	
+	-- Mine Right	
+	
+	-- Dont turn right, already aligned
+	if isCoolForward() then
+		print("right is cool")
+		digForward()
+		if forward() then
+		
+			minePosition()
+		
+			turnLeft()
+			turnLeft()
+			
+			forward()
+		else
+			turnLeft()
+			turnLeft()
+		end
+		turnRight()
+	else
+		turnLeft()
+	end
+	print("mine position end")
+end
+
+function refuel()
+	if turtle.getFuelLevel() == 0 then
+		turtle.select(fuelSlot)
+		turtle.refuel(1) 
+		if turtle.getItemCount(1) == 0 then
+			-- TODO send message
+			error("no fuel left")
+		end
+	end
+end
+
+function getAutonomy()
+	return turtle.getFuelLevel() + turtle.getItemCount(1) * autonomyPerFuel
+end
+
+function forward()
+	refuel()
+	i = 10
+	while turtle.forward() == false and i > 0 do
+		digForward()
+		i = i-1
+	end
+	moved = true
+	
+	if i == 0 then
+		return false
+	else
+		return true
+	end
+end
+
+function back()
+	turnLeft()
+	turnLeft()
+	result = forward()
+	turnLeft()
+	turnLeft()
+	return result
+end
+
+function up()
+	refuel()
+	i = 10
+	while turtle.up() == false and i > 0 do
+		digUp()
+		i = i-1
+	end
+	moved = true
+	
+	if i == 0 then
+		return false
+	else
+		return true
+	end
+	
+end
+
+
+function down()
+	refuel()
+	i = 10
+	while turtle.down() == false and i > 0 do
+		digDown()
+		i = i-1
+	end
+	moved = true
+	if i == 0 then
+		return false
+	else
+		return true
+	end
+end
+
+
+function turnLeft()
+	turtle.turnLeft()
+	compass = (compass - 1) %4
+end
+
+function turnRight()
+	turtle.turnRight()
+	compass = (compass + 1) %4
+end
+
+function isCool(compareFunc, detectFunc)
+	
+	if not detectFunc() then
+		return false
+	end
+	
+	for i=firstGarbageSlot,lastGarbageSlot do
+		turtle.select(i)
+		if compareFunc() then
+			return false
+		end
+	end
+	return true
+end
+
+function isCoolForward()
+	return isCool(turtle.compare, turtle.detect)
+end
+
+function isCoolUp()
+	return isCool(turtle.compareUp, turtle.detectUp)
+end
+
+function isCoolDown()
+	return isCool(turtle.compareDown, turtle.detectDown)
+end
+
+function digForward()
+	dig(turtle.dig, turtle.detect, turtle.compare)
+end
+
+function digUp()
+	dig(turtle.digUp)
+end
+
+function digDown()
+	dig(turtle.digDown)
+end
+
+function dig(digFunc)
+	
+	-- dig
+	turtle.select(1)
+	digFunc()
+	
+	-- check garbage
+	for i=firstGarbageSlot,lastGarbageSlot do
+		if turtle.getItemSpace(i) == 0 then
+			turtle.select(i)
+			turtle.drop(1)
+		end
+	end
+	
+	-- Check capacity
+	if turtle.getItemCount(16)>0 then 
+		gotoLocation(chestLocation, true)
+		error("implement drop")
+	end
+end
+
+function findNearestBlockCorner(location, block)
+	--print("findNearestBlockCorner")
+	--print("block "..block.toString())
+	nearestCorner = 0
+	nearestCornerLocation = block.getCornerLocation(0)
+	minDistance = location.distanceTo(nearestCornerLocation)
+	
+	--print("corner "..nearestCorner.." at "..minDistance.." "..nearestCornerLocation.toString())
+	
+	for i=1,3 do
+		
+		cornerLocation = block.getCornerLocation(i)
+		cornerDistance = location.distanceTo(cornerLocation)
+		--print("corner "..i.." at "..cornerDistance.." "..cornerLocation.toString())
+		if minDistance > cornerDistance then
+			nearestCorner = i
+			nearestCornerLocation = cornerLocation
+			minDistance = cornerDistance
+		end
+		
+	end
+	
+	print("nearestCorner "..nearestCorner.." at "..minDistance.." "..nearestCornerLocation.toString())
+	
+	return nearestCornerLocation, nearestCorner, minDistance
+	
+end
+
+function openModem()
+	local bOpen, sFreeSide = false, nil
+	for n,sSide in pairs(rs.getSides()) do	
+		if peripheral.getType( sSide ) == "modem" then
+			sFreeSide = sSide
+			if rednet.isOpen( sSide ) then
+				bOpen = true
+				break
+			end
+		end
+	end
+	
+	if not bOpen then
+		if sFreeSide then
+			print( "No modem active. Opening "..sFreeSide.." modem" )
+			rednet.open( sFreeSide )
+			return true
+		else
+			print( "No modem attached" )
+			return false
+		end
+	end
+	return true
+end
+
+
+function gotoLocation(targetLocation, altitudeFirst)
+	print( "gotoLocation "..targetLocation.toString() )
+	print( "chestLocation "..chestLocation.toString() )
+	--sleep(5)
+	
+	if  targetLocation.distanceTo(Location.turtle()) == 0 then
+		return
+	end
+	
+	currentRelativeLocation = Location.turtle().minus(chestLocation).toSouth(5).toEast(5)
+	targetRelativeLocation = targetLocation.minus(chestLocation).toSouth(5).toEast(5)
+	
+	print( "currentRelativeLocation "..currentRelativeLocation.toString() )
+	print( "targetRelativeLocation "..targetRelativeLocation.toString() )
+	
+	--find current block
+	startBlock = Block.new(math.floor(currentRelativeLocation.x /BLOCK_SIZE), math.floor(currentRelativeLocation.y /BLOCK_SIZE))
+	--find destination block
+	endBlock = Block.new(math.floor(targetRelativeLocation.x /BLOCK_SIZE), math.floor(targetRelativeLocation.y /BLOCK_SIZE))
+	
+	print( "startBlock "..startBlock.toString() )
+	print( "endBlock "..endBlock.toString() )
+	sleep(10)
+		
+	--find nearst corner to local block and shift to road
+	startNearestCornerLocation, startNearestCorner, distance = findNearestBlockCorner(Location.turtle(), startBlock)
+	if startNearestCorner == 2 or startNearestCorner == 3 then
+		startNearestCornerLocation = startNearestCornerLocation.toNorth(1)
+	end
+	if startNearestCorner == 1 or startNearestCorner == 2 then
+		startNearestCornerLocation = startNearestCornerLocation.toEast(1)
+	end
+	
+	
+	--find nearest corner to local block  and shift to road
+	endNearestCornerLocation, endNearestCorner, distance = findNearestBlockCorner(targetLocation, endBlock)
+	if endNearestCorner == 2 or endNearestCorner == 3 then
+		endNearestCornerLocation = endNearestCornerLocation.toNorth(1)
+	end
+	if endNearestCorner == 1 or endNearestCorner == 2 then
+		endNearestCornerLocation = endNearestCornerLocation.toEast(1)
+	end
+		
+		
+	print( "startNearestCornerLocation "..startNearestCornerLocation.toString() )
+	print( "endNearestCornerLocation "..endNearestCornerLocation.toString() )
+
+	if altitudeFirst then
+		--travel to target z
+		directGotoAltitude(targetLocation)
+	end
+		
+	--travel to road
+	directGotoLocation(startNearestCornerLocation)
+	
+	--travel in road
+	directGotoLocation(endNearestCornerLocation)
+	
+	--travel to target
+	directGotoLocation(targetLocation)
+	
+	if not altitudeFirst then
+		--travel to target z
+		directGotoAltitude(targetLocation)
+	end
+	
+	if Location.turtle().distanceTo(targetLocation) > 0 then
+		error("Fail to move correctly: "..Location.turtle().toString().." instead of "..targetLocation.toString())
+	end
+	
+end
+
+function directGotoLocation(targetLocation)
+	targetRelativeLocation = targetLocation.minus(Location.turtle())
+	
+	if targetRelativeLocation.x > 0 then
+		turnTo(EAST)
+		for i=1, targetRelativeLocation.x do
+			forward()
+		end
+	elseif targetRelativeLocation.x < 0 then
+		turnTo(WEST)
+		for i=1, -targetRelativeLocation.x do
+			forward()
+		end
+	end
+	
+	if targetRelativeLocation.y > 0 then
+		turnTo(SOUTH)
+		for i=1, targetRelativeLocation.y do
+			forward()
+		end
+	elseif targetRelativeLocation.y < 0 then
+		turnTo(NORTH)
+		for i=1, -targetRelativeLocation.y do
+			forward()
+		end
+	end
+end
+
+function directGotoAltitude(targetLocation)
+	targetRelativeLocation = targetLocation.minus(Location.turtle())
+	
+	if targetRelativeLocation.h > 0 then
+		for i=1, targetRelativeLocation.h do
+			up()
+		end
+	elseif targetRelativeLocation.h < 0 then
+		for i=1, -targetRelativeLocation.h do
+			down()
+		end
+	end
+end
+
+
+function turnTo(direction)
+	if ((compass +1) %4 ) == direction then
+		turnRight()
+	elseif ((compass - 1) %4) == direction then
+		turnLeft()
+	elseif direction ~= compass then
+		turnRight()
+		turnRight()
+	end
+	
+end
+
+if not arg[1] then
+	print("Usage: automine maxDistance")
+	return
+end
+
+init()
+
+run()
+
+

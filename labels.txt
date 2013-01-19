@@ -1,2 +1,7 @@
+17 miner2
 16 miner
+19 gps3
+21 gps4
+20 gps2
+23 monitor
 15 room_digger
