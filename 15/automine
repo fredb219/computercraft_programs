@@ -571,8 +571,38 @@ function dig(digFunc)
 	
 	-- Check capacity
 	if turtle.getItemCount(16)>0 then 
-		gotoLocation(chestLocation, true)
-		error("implement drop")
+		print("Check capacity failed, go drop")
+		backupLocation = Location.turtle()
+		backupDirection = compass
+		print("backupLocation"..backupLocation.toString())
+		print("backupDirection "..backupDirection)
+		sleep(10)
+		
+		chestInputLocation, chestInputDirection = findNearestChestInput()
+		
+		gotoLocation(chestInputLocation, true)
+		turnTo(chestInputDirection)
+		print("to the chest")
+		sleep(10)
+		-- Give loots
+		for i=lastGarbageSlot+1,16 do
+			turtle.select(i)
+			turtle.drop()
+		end
+		
+		--clear garbage
+		for i=firstGarbageSlot,lastGarbageSlot do
+			turtle.select(i)
+			turtle.drop(turtle.getItemCount(i)-1)
+		end
+		print("drop done")
+		sleep(10)
+				
+		gotoLocation(backupLocation, true)
+		turnTo(backupDirection)
+		
+		print("return done")
+		sleep(10)
 	end
 end
 
@@ -602,6 +632,31 @@ function findNearestBlockCorner(location, block)
 	
 	return nearestCornerLocation, nearestCorner, minDistance
 	
+end
+
+function findNearestChestInput()
+
+	minDistance = chestLocation.distanceTo(Location.turtle())
+	
+	if minDistance > chestLocation.toNorth(1).distanceTo(Location.turtle()) then
+		chestInputLocation = chestLocation.toNorth(1)
+		minDistance = chestInputLocation.distanceTo(Location.turtle())
+		chestInputDirection = 0
+	elseif minDistance > chestLocation.toSouth(1).distanceTo(Location.turtle()) then
+		chestInputLocation = chestLocation.toSouth(1)
+		minDistance = chestInputLocation.distanceTo(Location.turtle())
+		chestInputDirection = 2
+	elseif minDistance > chestLocation.toWest(1).distanceTo(Location.turtle()) then
+		chestInputLocation = chestLocation.toWest(1)
+		minDistance = chestInputLocation.distanceTo(Location.turtle())
+		chestInputDirection = 3
+	elseif minDistance > chestLocation.toEast(1).distanceTo(Location.turtle()) then
+		chestInputLocation = chestLocation.toEast(1)
+		minDistance = chestInputLocation.distanceTo(Location.turtle())
+		chestInputDirection = 1
+	end
+	
+	return chestInputLocation, chestInputDirection
 end
 
 function openModem()
@@ -639,20 +694,19 @@ function gotoLocation(targetLocation, altitudeFirst)
 		return
 	end
 	
-	currentRelativeLocation = Location.turtle().minus(chestLocation).toSouth(5).toEast(5)
-	targetRelativeLocation = targetLocation.minus(chestLocation).toSouth(5).toEast(5)
+	currentRelativeLocation = Location.turtle().minus(chestLocation).toNorth(6).toEast(5)
+	targetRelativeLocation = targetLocation.minus(chestLocation).toNorth(6).toEast(5)
 	
 	print( "currentRelativeLocation "..currentRelativeLocation.toString() )
 	print( "targetRelativeLocation "..targetRelativeLocation.toString() )
 	
 	--find current block
-	startBlock = Block.new(math.floor(currentRelativeLocation.x /BLOCK_SIZE), math.floor(currentRelativeLocation.y /BLOCK_SIZE))
+	startBlock = Block.new(math.floor(currentRelativeLocation.x /BLOCK_SIZE), math.ceil(currentRelativeLocation.y /BLOCK_SIZE))
 	--find destination block
-	endBlock = Block.new(math.floor(targetRelativeLocation.x /BLOCK_SIZE), math.floor(targetRelativeLocation.y /BLOCK_SIZE))
+	endBlock = Block.new(math.floor(targetRelativeLocation.x /BLOCK_SIZE), math.ceil(targetRelativeLocation.y /BLOCK_SIZE))
 	
 	print( "startBlock "..startBlock.toString() )
 	print( "endBlock "..endBlock.toString() )
-	sleep(10)
 		
 	--find nearst corner to local block and shift to road
 	startNearestCornerLocation, startNearestCorner, distance = findNearestBlockCorner(Location.turtle(), startBlock)
@@ -665,7 +719,7 @@ function gotoLocation(targetLocation, altitudeFirst)
 	
 	
 	--find nearest corner to local block  and shift to road
-	endNearestCornerLocation, endNearestCorner, distance = findNearestBlockCorner(targetLocation, endBlock)
+	endNearestCornerLocation, endNearestCorner, distance = findNearestBlockCorner(startNearestCornerLocation, endBlock)
 	if endNearestCorner == 2 or endNearestCorner == 3 then
 		endNearestCornerLocation = endNearestCornerLocation.toNorth(1)
 	end
